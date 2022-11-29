@@ -3,7 +3,7 @@
     "targets": ["omnifocus"],
     "author": "Donie",
     "identifier": "org.0x3f.generate_work_journal",
-    "version": "1.1",
+    "version": "2.0",
     "description": "Assemble work logs of today and put them in clipboard.",
     "label": "Generate work journal",
     "shortLabel": "Generate work journal",
@@ -11,6 +11,13 @@
     "image": "list.number"
 }*/
 (() => {
+    let preferences = new Preferences();
+
+    const PREF_DONE_LABEL       = 'done_label';
+    const PREF_GENERIC_PROJECTS = 'generic_project_ids';
+    const PREF_IGNORED_TAGS     = 'ignored_tag_ids';
+    const PREF_JOURNAL_FOLDER   = 'journal_folder_id';
+
     if (!Task.prototype.isTaggedUnder) {
         Task.prototype.isTaggedUnder = function (tag) {
             return this.tags.some(t => {
@@ -29,19 +36,168 @@
         };
     }
 
+    function prompt_preferences_dialog() {
+        // Work journal folder
+
+        let menuItems = flattenedFolders.map((folder) => {
+            let label = folder.name;
+
+            while (folder.parent !== null) {
+                label = folder.parent.name + " > " + label;
+                folder = folder.parent;
+            }
+
+            return label;
+        });
+
+        let menuKeys = flattenedFolders.map((folder) => {
+            return folder.id.primaryKey;
+        });
+
+        let journalFolderId = preferences.readString(PREF_JOURNAL_FOLDER);
+
+        let menu = new Form.Field.Option(
+            PREF_JOURNAL_FOLDER,
+            "Work journal folder",
+            menuKeys,
+            menuItems,
+            journalFolderId
+        )
+
+        // Label for the done status
+
+        let doneLabel = preferences.readString(PREF_DONE_LABEL);
+        
+        let doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, "Label for the done status", doneLabel);
+
+        // Generic projects
+
+        let projectNames = flattenedProjects.map((project) => {
+            return project.name;
+        });
+
+        let projectIds = flattenedProjects.map((project) => {
+            return project.id.primaryKey;
+        });
+
+        let genericProjectIds = preferences.readString(PREF_GENERIC_PROJECTS);
+
+        if (genericProjectIds) {
+            genericProjectIds = JSON.parse(genericProjectIds);
+        } else {
+            genericProjectIds = [];
+        }
+
+        let genericProjects = new Form.Field.MultipleOptions(
+            PREF_GENERIC_PROJECTS,
+            "Generic projects",
+            projectIds,
+            projectNames,
+            genericProjectIds
+        )
+
+        // Ignored tags
+
+        let tagNames = flattenedTags.map((tag) => {
+            let label = tag.name;
+
+            while (tag.parent !== null) {
+                label = tag.parent.name + " : " + label;
+                tag = tag.parent;
+            }
+
+            return label;
+        });
+
+        let tagIds = flattenedTags.map((tag) => {
+            return tag.id.primaryKey;
+        });
+
+        let ignoredTagIds = preferences.readString(PREF_IGNORED_TAGS);
+
+        if (ignoredTagIds) {
+            ignoredTagIds = JSON.parse(ignoredTagIds);
+        } else {
+            ignoredTagIds = [];
+        }
+
+        let tagList = new Form.Field.MultipleOptions(
+            PREF_IGNORED_TAGS,
+            "Ignored tags",
+            tagIds,
+            tagNames,
+            ignoredTagIds
+        )
+
+        // Preferences
+
+        let preferenceForm = new Form();
+
+        preferenceForm.addField(menu);
+        preferenceForm.addField(doneLabelInput);
+        preferenceForm.addField(genericProjects);
+        preferenceForm.addField(tagList);
+
+        preferenceForm.validate = function (formObject) { return true; };
+
+        let formPromise = preferenceForm.show("Work journal", "Save");
+
+        formPromise.then((formObject) => {
+            let journalFolderId = formObject.values[PREF_JOURNAL_FOLDER];
+
+            if (journalFolderId) {
+                preferences.write(PREF_JOURNAL_FOLDER, journalFolderId.trim());
+            }
+
+            let doneLabel = formObject.values[PREF_DONE_LABEL];
+
+            if (doneLabel) {
+                preferences.write(PREF_DONE_LABEL, doneLabel.trim());
+            }
+
+            let genericProjectIds = formObject.values[PREF_GENERIC_PROJECTS];
+
+            if (genericProjectIds) {
+                preferences.write(PREF_GENERIC_PROJECTS, JSON.stringify(genericProjectIds));
+            }
+
+            let ignoredTagIds = formObject.values[PREF_IGNORED_TAGS];
+
+            if (ignoredTagIds) {
+                preferences.write(PREF_IGNORED_TAGS, JSON.stringify(ignoredTagIds));
+            }
+        });
+    }
+
+    function is_preference_action(sender) {
+        return (app.platformName === "macOS" && app.controlKeyDown) || (app.platformName === 'iOS' && sender instanceof MenuItem);
+    }
+
     function get_work_logs() {
-        const journal_folder_name = "Work";
+        const journalFolderId = preferences.readString(PREF_JOURNAL_FOLDER);
+
+        if (journalFolderId === null) {
+            throw { name: "Emmm...", message: "Work journal folder must be set in the preferences. (Click the action with CTRL key)" };
+        }
+
+        let ignoredTagIds = preferences.read(PREF_IGNORED_TAGS);
+
+        if (ignoredTagIds) {
+            ignoredTagIds = JSON.parse(ignoredTagIds);
+        } else {
+            ignoredTagIds = [];
+        }
+
         const journal_date = new Date();
 
         var logs = new Array();
 
-        folderNamed(journal_folder_name).flattenedProjects.forEach((proj) => {
+        Folder.byIdentifier(journalFolderId).flattenedProjects.forEach((proj) => {
             let completed_tasks = proj.flattenedTasks.filter(
                 (task) =>
-                    task.completed === true &&
-                    task.completionDate.toDateString() ===
-                        journal_date.toDateString() &&
-                    !task.isTaggedUnder(tagNamed("People"))
+                    task.completed === true
+                        && task.completionDate.toDateString() === journal_date.toDateString()
+                        && ignoredTagIds.every((tagId) => !task.isTaggedUnder(Tag.byIdentifier(tagId)))
             );
             logs = logs.concat(completed_tasks);
         });
@@ -51,73 +207,99 @@
 
     var action = new PlugIn.Action(function (selection, sender) {
         try {
-            let logs = get_work_logs();
+            if (is_preference_action(sender)) {
+                prompt_preferences_dialog();
+            } else {
+                let logs = get_work_logs();
 
-            if (logs.length === 0) {
-                throw { name: "Emmm...", message: "日志为空。" };
-            }
-
-            logs.sort((a, b) => {
-                if (a.completionDate > b.completionDate) {
-                    return -1;
-                } else if (a.completionDate < b.completionDate) {
-                    return 1;
-                } else {
-                    return 0;
+                if (logs.length === 0) {
+                    throw { name: "Emmm...", message: "Work journal is empty!" };
                 }
-            });
 
-            let logsByProject = {};
-
-            logs.forEach((log) => {
-                const projectName = log.containingProject.name;
-                if (typeof logsByProject[projectName] === "undefined") {
-                    logsByProject[projectName] = [log];
-                } else {
-                    logsByProject[projectName].push(log);
-                }
-            });
-
-            let logStrings = [];
-
-            for (const [projectName, logs] of Object.entries(logsByProject)) {
-                const logSubStrings = logs.map((log) => {
-                    let logSubStringParts = [];
-
-                    logSubStringParts.push(log.name);
-
-                    if (log.name.indexOf("面试") < 0) {
-                        logSubStringParts.push(
-                            log.note.length > 0
-                                ? log.note.replaceAll("\n", " ")
-                                : "完成"
-                        );
+                logs.sort((a, b) => {
+                    if (a.completionDate > b.completionDate) {
+                        return 1;
+                    } else if (a.completionDate < b.completionDate) {
+                        return -1;
+                    } else {
+                        return 0;
                     }
-
-                    return logSubStringParts.join(" ");
                 });
 
-                if (projectName === "Work") {
-                    logStrings = logStrings.concat(logSubStrings);
+                let logsByProject = {};
+
+                logs.forEach((log) => {
+                    const projectId = log.containingProject.id.primaryKey;
+                    if (typeof logsByProject[projectId] === "undefined") {
+                        logsByProject[projectId] = [log];
+                    } else {
+                        logsByProject[projectId].push(log);
+                    }
+                });
+
+                let logStrings = [];
+
+                let genericProjectIds = preferences.readString(PREF_GENERIC_PROJECTS);
+
+                if (genericProjectIds) {
+                    genericProjectIds = JSON.parse(genericProjectIds);
                 } else {
-                    logStrings.push(
-                        projectName + " " + logSubStrings.join(" ")
-                    );
+                    genericProjectIds = [];
                 }
+
+                let doneLabel = preferences.readString(PREF_DONE_LABEL);
+
+                if (!doneLabel) {
+                    doneLabel = "";
+                }
+
+                for (const [projectId, logs] of Object.entries(logsByProject)) {
+                    const logSubStrings = logs.map((log) => {
+                        let logSubStringParts = [];
+
+                        logSubStringParts.push(log.name);
+
+                        // Filter out URLs
+                        const urlPattern = /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/g;
+                        let note = log.note.replaceAll(urlPattern, "").trim();
+
+                        logSubStringParts.push(
+                            note.length > 0 ? note.replaceAll("\n", " ") : doneLabel
+                        );
+
+                        return logSubStringParts.join(" ");
+                    });
+
+                    if (genericProjectIds.includes(projectId)) {
+                        logStrings = logStrings.concat(logSubStrings);
+                    } else {
+                        logStrings.push(
+                            logs[0].containingProject.name + " " + logSubStrings.join(" ")
+                        );
+                    }
+                }
+
+                Pasteboard.general.string = logStrings.join("\n");
+
+                new Alert("Wow!", "Work journal has been put into the clipboard.").show();
             }
-
-            Pasteboard.general.string = logStrings.join("\n");
-
-            new Alert("Wow!", "已生成工作日志并复制到剪贴板。").show();
         } catch (err) {
             new Alert(err.name, err.message).show();
         }
     });
 
     action.validate = function (selection, sender) {
-        let logs = get_work_logs();
+        if (is_preference_action(sender)) {
+            return true;
+        }
 
-        return logs.length > 0;
+        try {
+            let logs = get_work_logs();
+
+            return logs.length > 0;
+        } catch (err) {
+            return false;
+        }
     };
 
     return action;
