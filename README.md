@@ -5,6 +5,10 @@ Each line starts with a task name, ends up with a status description. The status
 
 ## Quick Start Guide
 
+### Dependencies
+
+This plugin depends on the [omnifocus-plugin-libdev](https://github.com/xbot/omnifocus-plugin-libdev) library.
+
 ### Installation
 
 Clone the repo and link it in the Automation Configuration dialog in OmniFocus, or add it as a git submodule to the default plugin folder of OmniFocus. I recommend the latter for an easier synchronization with other devices.
@@ -13,6 +17,9 @@ Clone the repo and link it in the Automation Configuration dialog in OmniFocus, 
 cd ~/Library/Mobile Documents/iCloud~com~omnigroup~OmniFocus/Documents/Plug-Ins
 
 git init
+
+# Install the dependent library, ignore this if you have already installed it.
+git submodule add https://github.com/xbot/omnifocus-plugin-libdev.git libdev
 
 git submodule add https://github.com/xbot/omnifocus-plugin-generate-work-journal.git generate-work-journal
 
@@ -24,11 +31,19 @@ git submodule update --remote --recursive
 
 This plugin must be configured to make it work.
 
-Hold the Ctrl key and click the menu item Automation → generate-work-journal → Generate work journal, the preferences dialog will be opened.
+Hold the Ctrl key and click the menu item 'Automation → generate-work-journal → Generate work journal', the preferences dialog will be opened.
 
 #### Work journal folder
 
 The work projects should always be put in a specified folder, set this option according to your situation.
+
+#### Output format
+
+The generated content can be in any of the following formats:
+
+- Plain text (default)
+- Markdown ordered list
+- Markdown unordered list
 
 #### Label for the done status
 
@@ -46,7 +61,7 @@ This option is in this purpose, select your generic projects and those names won
 
 #### Ignored tags
 
-There are always some tasks that are not suitable to put in the work journal, you can identify them by using tags. Logs with tags selected in this option won't be put the generated content.
+There are always some tasks that are not suitable to put in the work journal, you can identify them by using tags. Logs with tags selected in this option won't be put in the generated content.
 
 ### Generate the work journal
 

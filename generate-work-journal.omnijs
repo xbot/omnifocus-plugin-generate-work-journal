@@ -3,7 +3,7 @@
     "targets": ["omnifocus"],
     "author": "Donie",
     "identifier": "org.0x3f.generate_work_journal",
-    "version": "2.0",
+    "version": "3.0",
     "description": "Assemble work logs of today and put them in clipboard.",
     "label": "Generate work journal",
     "shortLabel": "Generate work journal",
@@ -13,33 +13,43 @@
 (() => {
     let preferences = new Preferences();
 
+    const devPlugin = PlugIn.find('org.0x3f.libdev');
+
+    if (devPlugin === null) {
+        throw new Error('Dev library plugin not installed.');
+    }
+
+    const libdev = devPlugin.library('libdev');
+
+    // Preference keys
     const PREF_DONE_LABEL       = 'done_label';
     const PREF_GENERIC_PROJECTS = 'generic_project_ids';
     const PREF_IGNORED_TAGS     = 'ignored_tag_ids';
     const PREF_JOURNAL_FOLDER   = 'journal_folder_id';
+    const PREF_OUTPUT_FORMAT    = 'output_format';
 
-    if (!Task.prototype.isTaggedUnder) {
-        Task.prototype.isTaggedUnder = function (tag) {
-            return this.tags.some(t => {
-                while (t) {
-                    if (t.id.primaryKey === tag.id.primaryKey) {
-                        return true;
-                    }
+    // Preferences dialog field labels
+    const LABEL_DONE_LABEL       = 'Label for the done status';
+    const LABEL_GENERIC_PROJECTS = 'Generic projects';
+    const LABEL_IGNORED_TAGS     = 'Ignored tags';
+    const LABEL_JOURNAL_FOLDER   = 'Work journal folder';
+    const LABEL_OUTPUT_FORMAT    = 'Output format';
 
-                    t = t.parent;
+    // Output format option keys
+    const OF_KEY_PLAIN_TEXT              = 'plain_text';
+    const OF_KEY_MARKDOWN_ORDERED_LIST   = 'markdown_ordered_list';
+    const OF_KEY_MARKDOWN_UNORDERED_LIST = 'markdown_unordered_list';
 
-                    if (t === null) {
-                        return false;
-                    }
-                }
-            });
-        };
-    }
+    // Output format option labels
+    const OF_LABEL_PLAIN_TEXT              = 'Plain text';
+    const OF_LABEL_MARKDOWN_ORDERED_LIST   = 'Markdown ordered list';
+    const OF_LABEL_MARKDOWN_UNORDERED_LIST = 'Markdown unordered list';
 
     function prompt_preferences_dialog() {
         // Work journal folder
 
-        let menuItems = flattenedFolders.map((folder) => {
+        const folderIds   = flattenedFolders.map(folder => folder.id.primaryKey);
+        const folderNames = flattenedFolders.map((folder) => {
             let label = folder.name;
 
             while (folder.parent !== null) {
@@ -50,55 +60,53 @@
             return label;
         });
 
-        let menuKeys = flattenedFolders.map((folder) => {
-            return folder.id.primaryKey;
-        });
+        const journalFolderId = libdev.getString(preferences, PREF_JOURNAL_FOLDER);
 
-        let journalFolderId = preferences.readString(PREF_JOURNAL_FOLDER);
-
-        let menu = new Form.Field.Option(
+        const journalFolderOption = new Form.Field.Option(
             PREF_JOURNAL_FOLDER,
-            "Work journal folder",
-            menuKeys,
-            menuItems,
+            LABEL_JOURNAL_FOLDER,
+            folderIds,
+            folderNames,
             journalFolderId
-        )
+        );
+
+        // Output format
+
+        const outputFormat = libdev.getString(preferences, PREF_OUTPUT_FORMAT);
+
+        const outputFormatOption = new Form.Field.Option(
+            PREF_OUTPUT_FORMAT,
+            LABEL_OUTPUT_FORMAT,
+            [OF_KEY_PLAIN_TEXT, OF_KEY_MARKDOWN_ORDERED_LIST, OF_KEY_MARKDOWN_UNORDERED_LIST],
+            [OF_LABEL_PLAIN_TEXT, OF_LABEL_MARKDOWN_ORDERED_LIST, OF_LABEL_MARKDOWN_UNORDERED_LIST],
+            outputFormat
+        );
 
         // Label for the done status
 
-        let doneLabel = preferences.readString(PREF_DONE_LABEL);
-        
-        let doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, "Label for the done status", doneLabel);
+        const doneLabel = libdev.getString(preferences, PREF_DONE_LABEL);
+
+        const doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, LABEL_DONE_LABEL, doneLabel);
 
         // Generic projects
 
-        let projectNames = flattenedProjects.map((project) => {
-            return project.name;
-        });
+        const projectIds   = flattenedProjects.map(project => project.id.primaryKey);
+        const projectNames = flattenedProjects.map(project => project.name);
 
-        let projectIds = flattenedProjects.map((project) => {
-            return project.id.primaryKey;
-        });
+        const genericProjectIds = libdev.getJson(preferences, PREF_GENERIC_PROJECTS, []);
 
-        let genericProjectIds = preferences.readString(PREF_GENERIC_PROJECTS);
-
-        if (genericProjectIds) {
-            genericProjectIds = JSON.parse(genericProjectIds);
-        } else {
-            genericProjectIds = [];
-        }
-
-        let genericProjects = new Form.Field.MultipleOptions(
+        const genericProjects = new Form.Field.MultipleOptions(
             PREF_GENERIC_PROJECTS,
-            "Generic projects",
+            LABEL_GENERIC_PROJECTS,
             projectIds,
             projectNames,
             genericProjectIds
-        )
+        );
 
         // Ignored tags
 
-        let tagNames = flattenedTags.map((tag) => {
+        const tagIds   = flattenedTags.map(tag => tag.id.primaryKey);
+        const tagNames = flattenedTags.map((tag) => {
             let label = tag.name;
 
             while (tag.parent !== null) {
@@ -109,91 +117,54 @@
             return label;
         });
 
-        let tagIds = flattenedTags.map((tag) => {
-            return tag.id.primaryKey;
-        });
+        const ignoredTagIds = libdev.getJson(preferences, PREF_IGNORED_TAGS, []);
 
-        let ignoredTagIds = preferences.readString(PREF_IGNORED_TAGS);
-
-        if (ignoredTagIds) {
-            ignoredTagIds = JSON.parse(ignoredTagIds);
-        } else {
-            ignoredTagIds = [];
-        }
-
-        let tagList = new Form.Field.MultipleOptions(
+        const tagList = new Form.Field.MultipleOptions(
             PREF_IGNORED_TAGS,
-            "Ignored tags",
+            LABEL_IGNORED_TAGS,
             tagIds,
             tagNames,
             ignoredTagIds
-        )
+        );
 
         // Preferences
 
-        let preferenceForm = new Form();
+        const preferenceForm = new Form();
 
-        preferenceForm.addField(menu);
+        preferenceForm.addField(journalFolderOption);
+        preferenceForm.addField(outputFormatOption);
         preferenceForm.addField(doneLabelInput);
         preferenceForm.addField(genericProjects);
         preferenceForm.addField(tagList);
 
         preferenceForm.validate = function (formObject) { return true; };
 
-        let formPromise = preferenceForm.show("Work journal", "Save");
+        const formPromise = preferenceForm.show("Work journal", "Save");
 
         formPromise.then((formObject) => {
-            let journalFolderId = formObject.values[PREF_JOURNAL_FOLDER];
-
-            if (journalFolderId) {
-                preferences.write(PREF_JOURNAL_FOLDER, journalFolderId.trim());
-            }
-
-            let doneLabel = formObject.values[PREF_DONE_LABEL];
-
-            if (doneLabel) {
-                preferences.write(PREF_DONE_LABEL, doneLabel.trim());
-            }
-
-            let genericProjectIds = formObject.values[PREF_GENERIC_PROJECTS];
-
-            if (genericProjectIds) {
-                preferences.write(PREF_GENERIC_PROJECTS, JSON.stringify(genericProjectIds));
-            }
-
-            let ignoredTagIds = formObject.values[PREF_IGNORED_TAGS];
-
-            if (ignoredTagIds) {
-                preferences.write(PREF_IGNORED_TAGS, JSON.stringify(ignoredTagIds));
-            }
+            libdev.setString(preferences, PREF_JOURNAL_FOLDER, formObject);
+            libdev.setString(preferences, PREF_OUTPUT_FORMAT, formObject);
+            libdev.setString(preferences, PREF_DONE_LABEL, formObject);
+            libdev.setJson(preferences, PREF_GENERIC_PROJECTS, formObject);
+            libdev.setJson(preferences, PREF_IGNORED_TAGS, formObject);
         });
     }
 
-    function is_preference_action(sender) {
-        return (app.platformName === "macOS" && app.controlKeyDown) || (app.platformName === 'iOS' && sender instanceof MenuItem);
-    }
-
     function get_work_logs() {
-        const journalFolderId = preferences.readString(PREF_JOURNAL_FOLDER);
+        const journalFolderId = libdev.getString(preferences, PREF_JOURNAL_FOLDER);
 
         if (journalFolderId === null) {
             throw { name: "Emmm...", message: "Work journal folder must be set in the preferences. (Click the action with CTRL key)" };
         }
 
-        let ignoredTagIds = preferences.read(PREF_IGNORED_TAGS);
-
-        if (ignoredTagIds) {
-            ignoredTagIds = JSON.parse(ignoredTagIds);
-        } else {
-            ignoredTagIds = [];
-        }
+        const ignoredTagIds = libdev.getJson(preferences, PREF_IGNORED_TAGS, []);
 
         const journal_date = new Date();
 
-        var logs = new Array();
+        let logs = new Array();
 
         Folder.byIdentifier(journalFolderId).flattenedProjects.forEach((proj) => {
-            let completed_tasks = proj.flattenedTasks.filter(
+            const completed_tasks = proj.flattenedTasks.filter(
                 (task) =>
                     task.completed === true
                         && task.completionDate.toDateString() === journal_date.toDateString()
@@ -207,10 +178,10 @@
 
     var action = new PlugIn.Action(function (selection, sender) {
         try {
-            if (is_preference_action(sender)) {
+            if (libdev.isPreferenceAction(sender)) {
                 prompt_preferences_dialog();
             } else {
-                let logs = get_work_logs();
+                const logs = get_work_logs();
 
                 if (logs.length === 0) {
                     throw { name: "Emmm...", message: "Work journal is empty!" };
@@ -239,19 +210,8 @@
 
                 let logStrings = [];
 
-                let genericProjectIds = preferences.readString(PREF_GENERIC_PROJECTS);
-
-                if (genericProjectIds) {
-                    genericProjectIds = JSON.parse(genericProjectIds);
-                } else {
-                    genericProjectIds = [];
-                }
-
-                let doneLabel = preferences.readString(PREF_DONE_LABEL);
-
-                if (!doneLabel) {
-                    doneLabel = "";
-                }
+                const doneLabel         = libdev.getString(preferences, PREF_DONE_LABEL, '');
+                const genericProjectIds = libdev.getJson(preferences, PREF_GENERIC_PROJECTS, []);
 
                 for (const [projectId, logs] of Object.entries(logsByProject)) {
                     const logSubStrings = logs.map((log) => {
@@ -261,7 +221,7 @@
 
                         // Filter out URLs
                         const urlPattern = /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/g;
-                        let note = log.note.replaceAll(urlPattern, "").trim();
+                        const note = log.note.replaceAll(urlPattern, "").trim();
 
                         logSubStringParts.push(
                             note.length > 0 ? note.replaceAll("\n", " ") : doneLabel
@@ -279,6 +239,14 @@
                     }
                 }
 
+                const outputFormat = libdev.getString(preferences, PREF_OUTPUT_FORMAT);
+
+                if (outputFormat === OF_KEY_MARKDOWN_ORDERED_LIST) {
+                    logStrings = logStrings.map(log => '1. ' + log);
+                } else if (outputFormat === OF_KEY_MARKDOWN_UNORDERED_LIST) {
+                    logStrings = logStrings.map(log => '- ' + log);
+                }
+
                 Pasteboard.general.string = logStrings.join("\n");
 
                 new Alert("Wow!", "Work journal has been put into the clipboard.").show();
@@ -289,12 +257,12 @@
     });
 
     action.validate = function (selection, sender) {
-        if (is_preference_action(sender)) {
+        if (libdev.isPreferenceAction(sender)) {
             return true;
         }
 
         try {
-            let logs = get_work_logs();
+            const logs = get_work_logs();
 
             return logs.length > 0;
         } catch (err) {
