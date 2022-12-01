@@ -11,7 +11,7 @@
     "image": "list.number"
 }*/
 (() => {
-    let preferences = new Preferences();
+    const preferences = new Preferences();
 
     const devPlugin = PlugIn.find('org.0x3f.libdev');
 
@@ -27,13 +27,6 @@
     const PREF_IGNORED_TAGS     = 'ignored_tag_ids';
     const PREF_JOURNAL_FOLDER   = 'journal_folder_id';
     const PREF_OUTPUT_FORMAT    = 'output_format';
-
-    // Preferences dialog field labels
-    const LABEL_DONE_LABEL       = 'Label for the done status';
-    const LABEL_GENERIC_PROJECTS = 'Generic projects';
-    const LABEL_IGNORED_TAGS     = 'Ignored tags';
-    const LABEL_JOURNAL_FOLDER   = 'Work journal folder';
-    const LABEL_OUTPUT_FORMAT    = 'Output format';
 
     // Output format option keys
     const OF_KEY_PLAIN_TEXT              = 'plain_text';
@@ -53,7 +46,7 @@
             let label = folder.name;
 
             while (folder.parent !== null) {
-                label = folder.parent.name + " > " + label;
+                label = folder.parent.name + ' > ' + label;
                 folder = folder.parent;
             }
 
@@ -64,7 +57,7 @@
 
         const journalFolderOption = new Form.Field.Option(
             PREF_JOURNAL_FOLDER,
-            LABEL_JOURNAL_FOLDER,
+            'Work journal folder',
             folderIds,
             folderNames,
             journalFolderId
@@ -76,7 +69,7 @@
 
         const outputFormatOption = new Form.Field.Option(
             PREF_OUTPUT_FORMAT,
-            LABEL_OUTPUT_FORMAT,
+            'Output format',
             [OF_KEY_PLAIN_TEXT, OF_KEY_MARKDOWN_ORDERED_LIST, OF_KEY_MARKDOWN_UNORDERED_LIST],
             [OF_LABEL_PLAIN_TEXT, OF_LABEL_MARKDOWN_ORDERED_LIST, OF_LABEL_MARKDOWN_UNORDERED_LIST],
             outputFormat
@@ -86,7 +79,7 @@
 
         const doneLabel = libdev.getString(preferences, PREF_DONE_LABEL);
 
-        const doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, LABEL_DONE_LABEL, doneLabel);
+        const doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, 'Label for the done status', doneLabel);
 
         // Generic projects
 
@@ -97,7 +90,7 @@
 
         const genericProjects = new Form.Field.MultipleOptions(
             PREF_GENERIC_PROJECTS,
-            LABEL_GENERIC_PROJECTS,
+            'Generic projects',
             projectIds,
             projectNames,
             genericProjectIds
@@ -110,7 +103,7 @@
             let label = tag.name;
 
             while (tag.parent !== null) {
-                label = tag.parent.name + " : " + label;
+                label = tag.parent.name + ' : ' + label;
                 tag = tag.parent;
             }
 
@@ -121,7 +114,7 @@
 
         const tagList = new Form.Field.MultipleOptions(
             PREF_IGNORED_TAGS,
-            LABEL_IGNORED_TAGS,
+            'Ignored tags',
             tagIds,
             tagNames,
             ignoredTagIds
@@ -139,7 +132,7 @@
 
         preferenceForm.validate = function (formObject) { return true; };
 
-        const formPromise = preferenceForm.show("Work journal", "Save");
+        const formPromise = preferenceForm.show('Work journal', 'Save');
 
         formPromise.then((formObject) => {
             libdev.setString(preferences, PREF_JOURNAL_FOLDER, formObject);
@@ -154,7 +147,7 @@
         const journalFolderId = libdev.getString(preferences, PREF_JOURNAL_FOLDER);
 
         if (journalFolderId === null) {
-            throw { name: "Emmm...", message: "Work journal folder must be set in the preferences. (Click the action with CTRL key)" };
+            throw { name: 'Emmm...', message: 'Work journal folder must be set in the preferences. (Click the action with CTRL key)' };
         }
 
         const ignoredTagIds = libdev.getJson(preferences, PREF_IGNORED_TAGS, []);
@@ -184,7 +177,7 @@
                 const logs = get_work_logs();
 
                 if (logs.length === 0) {
-                    throw { name: "Emmm...", message: "Work journal is empty!" };
+                    throw { name: 'Emmm...', message: 'Work journal is empty!' };
                 }
 
                 logs.sort((a, b) => {
@@ -201,7 +194,7 @@
 
                 logs.forEach((log) => {
                     const projectId = log.containingProject.id.primaryKey;
-                    if (typeof logsByProject[projectId] === "undefined") {
+                    if (typeof logsByProject[projectId] === 'undefined') {
                         logsByProject[projectId] = [log];
                     } else {
                         logsByProject[projectId].push(log);
@@ -221,20 +214,20 @@
 
                         // Filter out URLs
                         const urlPattern = /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/g;
-                        const note = log.note.replaceAll(urlPattern, "").trim();
+                        const note = log.note.replaceAll(urlPattern, '').trim();
 
                         logSubStringParts.push(
-                            note.length > 0 ? note.replaceAll("\n", " ") : doneLabel
+                            note.length > 0 ? note.replaceAll('\n', ' ') : doneLabel
                         );
 
-                        return logSubStringParts.join(" ");
+                        return logSubStringParts.join(' ');
                     });
 
                     if (genericProjectIds.includes(projectId)) {
                         logStrings = logStrings.concat(logSubStrings);
                     } else {
                         logStrings.push(
-                            logs[0].containingProject.name + " " + logSubStrings.join(" ")
+                            logs[0].containingProject.name + ' ' + logSubStrings.join(' ')
                         );
                     }
                 }
@@ -247,9 +240,9 @@
                     logStrings = logStrings.map(log => '- ' + log);
                 }
 
-                Pasteboard.general.string = logStrings.join("\n");
+                Pasteboard.general.string = logStrings.join('\n');
 
-                new Alert("Wow!", "Work journal has been put into the clipboard.").show();
+                new Alert('Wow!', 'Work journal has been put into the clipboard.').show();
             }
         } catch (err) {
             new Alert(err.name, err.message).show();
