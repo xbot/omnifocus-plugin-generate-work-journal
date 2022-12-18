@@ -3,7 +3,7 @@
     "targets": ["omnifocus"],
     "author": "Donie",
     "identifier": "org.0x3f.generate_work_journal",
-    "version": "3.0",
+    "version": "4.0",
     "description": "Assemble work logs of today and put them in clipboard.",
     "label": "Generate work journal",
     "shortLabel": "Generate work journal",
@@ -22,11 +22,12 @@
     const libdev = devPlugin.library('libdev');
 
     // Preference keys
-    const PREF_DONE_LABEL       = 'done_label';
-    const PREF_GENERIC_PROJECTS = 'generic_project_ids';
-    const PREF_IGNORED_TAGS     = 'ignored_tag_ids';
-    const PREF_JOURNAL_FOLDER   = 'journal_folder_id';
-    const PREF_OUTPUT_FORMAT    = 'output_format';
+    const PREF_DONE_LABEL        = 'done_label';
+    const PREF_GENERIC_PROJECTS  = 'generic_project_ids';
+    const PREF_IGNORED_TAGS      = 'ignored_tag_ids';
+    const PREF_IN_PROGRESS_LABEL = 'in_progress_label';
+    const PREF_JOURNAL_FOLDER    = 'journal_folder_id';
+    const PREF_OUTPUT_FORMAT     = 'output_format';
 
     // Output format option keys
     const OF_KEY_PLAIN_TEXT              = 'plain_text';
@@ -37,6 +38,33 @@
     const OF_LABEL_PLAIN_TEXT              = 'Plain text';
     const OF_LABEL_MARKDOWN_ORDERED_LIST   = 'Markdown ordered list';
     const OF_LABEL_MARKDOWN_UNORDERED_LIST = 'Markdown unordered list';
+
+    if (!Task.prototype.getStatusDescription) {
+        Task.prototype.getStatusDescription = function () {
+            const inProgressLabel   = libdev.getString(preferences, PREF_IN_PROGRESS_LABEL, '');
+            const doneLabel         = libdev.getString(preferences, PREF_DONE_LABEL, '');
+
+            // Filter out URLs
+            const urlPattern = /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/g;
+            const note = this.note.replaceAll(urlPattern, '').trim();
+
+            let statusLabel = doneLabel;
+
+            if (note.length > 0) {
+                statusLabel = note.replaceAll('\n', ' ');
+            } else {
+                const originalTaskIdArr = this.id.primaryKey.match(/^[A-Za-z0-9]+(?=\.\d+$)/);
+                if (originalTaskIdArr) {
+                    const originalTask = Task.byIdentifier(originalTaskIdArr[0]);
+                    if (originalTask && originalTask.completed === false) {
+                        statusLabel = inProgressLabel;
+                    }
+                }
+            }
+
+            return statusLabel;
+        };
+    }
 
     function prompt_preferences_dialog() {
         // Work journal folder
@@ -74,6 +102,12 @@
             [OF_LABEL_PLAIN_TEXT, OF_LABEL_MARKDOWN_ORDERED_LIST, OF_LABEL_MARKDOWN_UNORDERED_LIST],
             outputFormat
         );
+
+        // Label for the in-progress status
+
+        const inProgressLabel = libdev.getString(preferences, PREF_IN_PROGRESS_LABEL);
+
+        const inProgressLabelInput = new Form.Field.String(PREF_IN_PROGRESS_LABEL, 'Label for the in-progress status', inProgressLabel);
 
         // Label for the done status
 
@@ -126,6 +160,7 @@
 
         preferenceForm.addField(journalFolderOption);
         preferenceForm.addField(outputFormatOption);
+        preferenceForm.addField(inProgressLabelInput);
         preferenceForm.addField(doneLabelInput);
         preferenceForm.addField(genericProjects);
         preferenceForm.addField(tagList);
@@ -137,6 +172,7 @@
         formPromise.then((formObject) => {
             libdev.setString(preferences, PREF_JOURNAL_FOLDER, formObject);
             libdev.setString(preferences, PREF_OUTPUT_FORMAT, formObject);
+            libdev.setString(preferences, PREF_IN_PROGRESS_LABEL, formObject);
             libdev.setString(preferences, PREF_DONE_LABEL, formObject);
             libdev.setJson(preferences, PREF_GENERIC_PROJECTS, formObject);
             libdev.setJson(preferences, PREF_IGNORED_TAGS, formObject);
@@ -166,6 +202,16 @@
             logs = logs.concat(completed_tasks);
         });
 
+        logs.sort((a, b) => {
+            if (a.completionDate > b.completionDate) {
+                return 1;
+            } else if (a.completionDate < b.completionDate) {
+                return -1;
+            } else {
+                return 0;
+            }
+        });
+
         return logs;
     }
 
@@ -180,16 +226,6 @@
                     throw { name: 'Emmm...', message: 'Work journal is empty!' };
                 }
 
-                logs.sort((a, b) => {
-                    if (a.completionDate > b.completionDate) {
-                        return 1;
-                    } else if (a.completionDate < b.completionDate) {
-                        return -1;
-                    } else {
-                        return 0;
-                    }
-                });
-
                 let logsByProject = {};
 
                 logs.forEach((log) => {
@@ -203,25 +239,10 @@
 
                 let logStrings = [];
 
-                const doneLabel         = libdev.getString(preferences, PREF_DONE_LABEL, '');
                 const genericProjectIds = libdev.getJson(preferences, PREF_GENERIC_PROJECTS, []);
 
                 for (const [projectId, logs] of Object.entries(logsByProject)) {
-                    const logSubStrings = logs.map((log) => {
-                        let logSubStringParts = [];
-
-                        logSubStringParts.push(log.name);
-
-                        // Filter out URLs
-                        const urlPattern = /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/g;
-                        const note = log.note.replaceAll(urlPattern, '').trim();
-
-                        logSubStringParts.push(
-                            note.length > 0 ? note.replaceAll('\n', ' ') : doneLabel
-                        );
-
-                        return logSubStringParts.join(' ');
-                    });
+                    const logSubStrings = logs.map(log => log.name + ' ' + log.getStatusDescription());
 
                     if (genericProjectIds.includes(projectId)) {
                         logStrings = logStrings.concat(logSubStrings);

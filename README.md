@@ -45,13 +45,19 @@ The generated content can be in any of the following formats:
 - Markdown ordered list
 - Markdown unordered list
 
-#### Label for the done status
+#### Status labels
 
-This label will be appended to each log if it is done. For example, if you set this option to 'Done!', then the generated journal may be as the following:
+Each completed task may have a status label appended. For example, if you set the label of the status 'done' to 'Done!', then the generated journal may be as the following:
 
 `DEV-2123 Send SMS Notification When a Session Is Started at an Abnormal Place Done!`
 
-Leave it empty if you do not need anything appended.
+Currently, there are three types of statuses: **in-progress**, **done** and **custom status**.
+
+The in-progress status indicates that the completed task is a repeated one and there is still a remaining instance. For example, if I set a task to be repeated daily and marked it as completed today, then the task is considered to be in-progress. If I delete the remaining instance of this task, it indicates that the task is done.
+
+Besides, if the situation is complicated and you have put some content in the note input box. It will be taken as the status label and appended to the end of the corresponding line instead of the previous labels.
+
+If a completed task does not have a note and the status labels have not been set in the preferences, no status labels are appended to the end of each line.
 
 #### Generic projects
 
