@@ -3,7 +3,7 @@
     "targets": ["omnifocus"],
     "author": "Donie",
     "identifier": "org.0x3f.generate_work_journal",
-    "version": "4.0",
+    "version": "4.1",
     "description": "Assemble work logs of today and put them in clipboard.",
     "label": "Generate work journal",
     "shortLabel": "Generate work journal",
@@ -27,6 +27,7 @@
     const PREF_IGNORED_TAGS      = 'ignored_tag_ids';
     const PREF_IN_PROGRESS_LABEL = 'in_progress_label';
     const PREF_JOURNAL_FOLDER    = 'journal_folder_id';
+    const PREF_OPEN_URL          = 'open_url';
     const PREF_OUTPUT_FORMAT     = 'output_format';
 
     // Output format option keys
@@ -115,6 +116,12 @@
 
         const doneLabelInput = new Form.Field.String(PREF_DONE_LABEL, 'Label for the done status', doneLabel);
 
+        // URL to open
+
+        const openUrl = libdev.getString(preferences, PREF_OPEN_URL);
+
+        const openUrlInput = new Form.Field.String(PREF_OPEN_URL, 'Open this URL at last', openUrl);
+
         // Generic projects
 
         const projectIds   = flattenedProjects.map(project => project.id.primaryKey);
@@ -162,6 +169,7 @@
         preferenceForm.addField(outputFormatOption);
         preferenceForm.addField(inProgressLabelInput);
         preferenceForm.addField(doneLabelInput);
+        preferenceForm.addField(openUrlInput);
         preferenceForm.addField(genericProjects);
         preferenceForm.addField(tagList);
 
@@ -174,6 +182,7 @@
             libdev.setString(preferences, PREF_OUTPUT_FORMAT, formObject);
             libdev.setString(preferences, PREF_IN_PROGRESS_LABEL, formObject);
             libdev.setString(preferences, PREF_DONE_LABEL, formObject);
+            libdev.setString(preferences, PREF_OPEN_URL, formObject);
             libdev.setJson(preferences, PREF_GENERIC_PROJECTS, formObject);
             libdev.setJson(preferences, PREF_IGNORED_TAGS, formObject);
         });
@@ -264,6 +273,13 @@
                 Pasteboard.general.string = logStrings.join('\n');
 
                 new Alert('Wow!', 'Work journal has been put into the clipboard.').show();
+
+                // Open URL if exists
+                const openUrl = libdev.getString(preferences, PREF_OPEN_URL);
+
+                if (openUrl) {
+                    URL.fromString(openUrl).call(function(success){});
+                }
             }
         } catch (err) {
             new Alert(err.name, err.message).show();

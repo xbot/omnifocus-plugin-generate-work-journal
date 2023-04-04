@@ -59,6 +59,12 @@ Besides, if the situation is complicated and you have put some content in the no
 
 If a completed task does not have a note and the status labels have not been set in the preferences, no status labels are appended to the end of each line.
 
+#### Open URL automatically
+
+To open a specific URL after generating the journal, you can specify it in the preferences dialog. For instance, if you want to publish your journal on Slack and switch to a particular channel, you can save the following URL scheme:
+
+`slack://channel?team=YOUR_TEAM_ID&id=YOUR_CHANNEL_ID`
+
 #### Generic projects
 
 Normally the work journal is in a format like 'PROJECT_NAME TASK_NAME STATUS', for those short tasks, we always put them in a specified project and don't want to append the project name in the generated content.
