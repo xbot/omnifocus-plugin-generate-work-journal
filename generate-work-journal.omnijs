@@ -3,7 +3,7 @@
     "targets": ["omnifocus"],
     "author": "Donie",
     "identifier": "org.0x3f.generate_work_journal",
-    "version": "4.1",
+    "version": "4.2",
     "description": "Assemble work logs of today and put them in clipboard.",
     "label": "Generate work journal",
     "shortLabel": "Generate work journal",
@@ -272,7 +272,9 @@
 
                 Pasteboard.general.string = logStrings.join('\n');
 
-                new Alert('Wow!', 'Work journal has been put into the clipboard.').show();
+                const notification = new Notification('Wow!');
+                notification.subtitle = 'Work journal has been put into the clipboard.';
+                notification.show();
 
                 // Open URL if exists
                 const openUrl = libdev.getString(preferences, PREF_OPEN_URL);
